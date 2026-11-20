@@ -64,12 +64,13 @@ input[type=text],textarea{width:100%;padding:12px;font-size:16px;border:1px soli
 
   <div id="v-form" class="card hidden">
     <div class="tool" id="fTitle" style="font-size:20px"></div>
+    <label class="opt hidden" id="unkBox"><input type="checkbox" id="unk"><span data-i="unknownL"></span></label>
     <div id="fList"></div>
     <div id="manualBox">
       <label class="f" for="manual" data-i="manual"></label>
       <input type="text" id="manual" placeholder="MB-001" autocapitalize="characters">
     </div>
-    <label class="f" for="comment" data-i="comment"></label>
+    <label class="f" for="comment" id="commentL"></label>
     <textarea id="comment" rows="3"></textarea>
     <button class="btn" id="bSend"></button>
     <button class="btn sec" id="bBack" data-i="back"></button>
@@ -109,7 +110,7 @@ const I = {
     NOT_FOUND: 'Tokio įrankio numerio nėra.', NOT_ALLOWED: 'Šio įrankio taip perimti negalima.', NOT_REGISTERED: 'Pirmiausia nuskenuokite bet kurio įrankio QR kodą.',
     missingTitle: 'Kuris įrankis dingo?', damagedTitle: 'Kurio įrankio lipdukas pažeistas?',
     takeDamTitle: 'Kurį įrankį perimate?', none: 'Jūsų įrankių sąraše nėra – įveskite numerį žemiau.',
-    noneDam: 'Nėra įrankių su pažeistu lipduku.', sending: 'Siunčiama…',
+    noneDam: 'Nėra įrankių su pažeistu lipduku.', mineT: 'Jūsų įrankiai', nearT: 'Kiti įrankiai šiame objekte', unknownL: 'Nežinau įrankio numerio', describe: 'Aprašykite dingusį įrankį (gamintojas, tipas, spalva)', NO_DESC: 'Aprašykite dingusį įrankį.', sending: 'Siunčiama…',
     invalidQr: 'QR kodas neatpažintas. Galite pranešti apie problemą žemiau.'
   },
   en: {
@@ -129,7 +130,7 @@ const I = {
     NOT_FOUND: 'No tool with this number.', NOT_ALLOWED: 'This tool cannot be taken over this way.', NOT_REGISTERED: 'First scan the QR code of any tool.',
     missingTitle: 'Which tool is missing?', damagedTitle: 'Which tool has a damaged sticker?',
     takeDamTitle: 'Which tool are you taking?', none: 'No tools in your list – enter the number below.',
-    noneDam: 'No tools with a damaged sticker.', sending: 'Sending…',
+    noneDam: 'No tools with a damaged sticker.', mineT: 'Your tools', nearT: 'Other tools at this site', unknownL: 'I don\'t know the tool number', describe: 'Describe the missing tool (brand, type, colour)', NO_DESC: 'Describe the missing tool.', sending: 'Sending…',
     invalidQr: 'QR code not recognised. You can report the problem below.'
   },
   ru: {
@@ -149,7 +150,7 @@ const I = {
     NOT_FOUND: 'Инструмента с таким номером нет.', NOT_ALLOWED: 'Этот инструмент так взять нельзя.', NOT_REGISTERED: 'Сначала отсканируйте QR-код любого инструмента.',
     missingTitle: 'Какой инструмент пропал?', damagedTitle: 'У какого инструмента повреждена наклейка?',
     takeDamTitle: 'Какой инструмент вы берёте?', none: 'В вашем списке нет инструментов – введите номер ниже.',
-    noneDam: 'Нет инструментов с повреждённой наклейкой.', sending: 'Отправка…',
+    noneDam: 'Нет инструментов с повреждённой наклейкой.', mineT: 'Ваши инструменты', nearT: 'Другие инструменты на этом объекте', unknownL: 'Не знаю номер инструмента', describe: 'Опишите пропавший инструмент (марка, тип, цвет)', NO_DESC: 'Опишите пропавший инструмент.', sending: 'Отправка…',
     invalidQr: 'QR-код не распознан. Вы можете сообщить о проблеме ниже.'
   }
 };
@@ -275,7 +276,7 @@ async function act(fn, extra, okKey) {
     return true;
   } catch (e) {
     const m = String((e && e.message) || e);
-    const codes = { BAD_CODE: 'BAD_CODE', NOT_FOUND: 'NOT_FOUND', NOT_REGISTERED: 'NOT_REGISTERED', NOT_ALLOWED: 'NOT_ALLOWED', NO_NAME: 'needName', NO_GPS: 'gpsDenied' };
+    const codes = { BAD_CODE: 'BAD_CODE', NOT_FOUND: 'NOT_FOUND', NOT_REGISTERED: 'NOT_REGISTERED', NOT_ALLOWED: 'NOT_ALLOWED', NO_NAME: 'needName', NO_GPS: 'gpsDenied', NO_DESC: 'NO_DESC' };
     const hit = Object.keys(codes).find(c => m.indexOf(c) >= 0);
     show(tr(hit ? codes[hit] : 'err'), 'err');
     return false;
@@ -290,6 +291,7 @@ $('bTake').onclick = async () => {
 };
 
 function formTexts() {
+  $('commentL').textContent = tr(mode === 'missing' && $('unk').checked ? 'describe' : 'comment');
   $('fTitle').textContent = tr(mode === 'missing' ? 'missingTitle' : mode === 'damaged' ? 'damagedTitle' : 'takeDamTitle');
   $('bSend').textContent = tr(mode === 'takeDamaged' ? 'take' : 'send');
 }
@@ -304,28 +306,50 @@ async function openForm(m) {
   $('bSend').className = 'btn ' + (m === 'takeDamaged' ? 'main' : 'warn');
   $('manual').value = '';
   $('comment').value = '';
+  $('unk').checked = false;
+  $('unkBox').classList.toggle('hidden', m !== 'missing');
   formTexts();
   const box = $('fList');
+  box.classList.remove('hidden');
   box.textContent = tr('sending');
-  let list = [];
-  try { list = m === 'takeDamaged' ? damaged : await api({ action: 'mine', device: dev, name: $('name').value }); } catch (e) {}
+  let mine = [], near = [];
+  try {
+    if (m === 'takeDamaged') mine = damaged;
+    else {
+      const r = await api({ action: 'mine', device: dev, name: $('name').value, lat: pos && pos.lat, lng: pos && pos.lng });
+      mine = (r && r.mine) || []; near = (r && r.near) || [];
+    }
+  } catch (e) {}
   box.textContent = '';
-  if (!list.length) {
+  const group = (title, list) => {
+    if (!list.length) return;
+    if (title) { const t = document.createElement('div'); t.className = 'sub'; t.style.marginTop = '10px'; t.textContent = tr(title); box.appendChild(t); }
+    list.forEach(x => {
+      const l = document.createElement('label');
+      l.className = 'opt';
+      const r = document.createElement('input');
+      r.type = 'radio'; r.name = 'tool'; r.value = x.id;
+      l.appendChild(r);
+      l.appendChild(document.createTextNode(x.id + ' – ' + x.name));
+      box.appendChild(l);
+    });
+  };
+  if (!mine.length && !near.length) {
     const d = document.createElement('div');
     d.className = 'sub';
     d.textContent = tr(m === 'takeDamaged' ? 'noneDam' : 'none');
     box.appendChild(d);
   }
-  list.forEach(x => {
-    const l = document.createElement('label');
-    l.className = 'opt';
-    const r = document.createElement('input');
-    r.type = 'radio'; r.name = 'tool'; r.value = x.id;
-    l.appendChild(r);
-    l.appendChild(document.createTextNode(x.id + ' – ' + x.name));
-    box.appendChild(l);
-  });
+  group(m === 'takeDamaged' ? '' : 'mineT', mine);
+  group('nearT', near);
 }
+
+$('unk').onchange = () => {
+  const u = $('unk').checked;
+  $('fList').classList.toggle('hidden', u);
+  $('manualBox').classList.toggle('hidden', u);
+  formTexts();
+};
 
 $('bMissing').onclick = () => openForm('missing');
 $('bDamaged').onclick = () => openForm('damaged');
@@ -340,6 +364,15 @@ $('bBack').onclick = () => {
 };
 
 $('bSend').onclick = async () => {
+  if (mode === 'missing' && $('unk').checked) {
+    if (!$('comment').value.trim()) { show(tr('NO_DESC'), 'err'); return; }
+    const b0 = $('bSend');
+    b0.disabled = true;
+    const ok0 = await act('apiReport', { type: 'missing', unknown: true, comment: $('comment').value }, 'okReport');
+    b0.disabled = false;
+    if (ok0) { $('v-form').classList.add('hidden'); mode = null; }
+    return;
+  }
   const sel = document.querySelector('input[name=tool]:checked');
   const id = (sel && sel.value) || $('manual').value.trim();
   if (!id) { show(tr('needTool'), 'err'); return; }
