@@ -39,7 +39,9 @@ input[type=text],textarea{width:100%;padding:12px;font-size:16px;border:1px soli
   </div>
 
   <div id="gps" class="msg info"></div>
+  <button class="btn sec hidden" id="bRetry" data-i="retry"></button>
   <div id="pending" class="msg info hidden"></div>
+  <div id="main" class="hidden">
 
   <div class="card">
     <label class="f" for="name" data-i="name"></label>
@@ -73,11 +75,12 @@ input[type=text],textarea{width:100%;padding:12px;font-size:16px;border:1px soli
     <button class="btn sec" id="bBack" data-i="back"></button>
   </div>
 
+  </div>
   <div id="out"></div>
 </div>
 
+<script src="config.js"></script>
 <script>
-const API = 'https://script.google.com/macros/s/AKfycbxB-SC38colmUA0SZ8qR2U5M9QvvGYEjJZuathrhqTnjPJ5IG9lH8Y8wi6LLoH_ltK2rw/exec';
 
 function parseQ() {
   const sp = new URLSearchParams(location.search);
@@ -90,7 +93,7 @@ const P = parseQ();
 
 const I = {
   lt: {
-    name: 'Jūsų vardas ir pavardė', thisTool: 'Įrankis', take: 'Paėmiau šį įrankį', other: 'Kiti veiksmai',
+    name: 'Jūsų vardas ir pavardė', retry: 'Bandyti dar kartą', thisTool: 'Įrankis', take: 'Paėmiau šį įrankį', other: 'Kiti veiksmai',
     reportMissing: 'Pranešti apie dingusį įrankį', reportDamaged: 'Lipdukas pažeistas / nusitrynė',
     takeDamaged: 'Perimti įrankį su pažeistu lipduku', manual: 'Arba įveskite įrankio numerį',
     comment: 'Komentaras (kas nutiko?)', send: 'Siųsti', back: 'Atgal',
@@ -110,7 +113,7 @@ const I = {
     invalidQr: 'QR kodas neatpažintas. Galite pranešti apie problemą žemiau.'
   },
   en: {
-    name: 'Your first and last name', thisTool: 'Tool', take: 'I took this tool', other: 'Other actions',
+    name: 'Your first and last name', retry: 'Try again', thisTool: 'Tool', take: 'I took this tool', other: 'Other actions',
     reportMissing: 'Report a missing tool', reportDamaged: 'Sticker damaged / worn off',
     takeDamaged: 'Take over a tool with a damaged sticker', manual: 'Or enter the tool number',
     comment: 'Comment (what happened?)', send: 'Send', back: 'Back',
@@ -130,7 +133,7 @@ const I = {
     invalidQr: 'QR code not recognised. You can report the problem below.'
   },
   ru: {
-    name: 'Ваше имя и фамилия', thisTool: 'Инструмент', take: 'Я взял этот инструмент', other: 'Другие действия',
+    name: 'Ваше имя и фамилия', retry: 'Попробовать снова', thisTool: 'Инструмент', take: 'Я взял этот инструмент', other: 'Другие действия',
     reportMissing: 'Сообщить о пропаже инструмента', reportDamaged: 'Наклейка повреждена / стёрлась',
     takeDamaged: 'Взять инструмент с повреждённой наклейкой', manual: 'Или введите номер инструмента',
     comment: 'Комментарий (что случилось?)', send: 'Отправить', back: 'Назад',
@@ -182,6 +185,8 @@ function gpsMsg() {
   if (gpsErr) { g.className = 'msg err'; g.textContent = tr('gpsDenied'); }
   else if (pos) { g.className = 'msg ok'; g.textContent = tr('gpsOk'); }
   else { g.className = 'msg info'; g.textContent = tr('gpsWait'); }
+  $('main').classList.toggle('hidden', !pos || gpsErr);
+  $('bRetry').classList.toggle('hidden', !gpsErr);
 }
 
 function getPos() {
@@ -380,6 +385,7 @@ api({ action: 'init', t: P.t, k: P.k, device: dev }).then(r => {
   }
 });
 
+$('bRetry').onclick = () => { gpsErr = false; pos = null; gpsMsg(); getPos().catch(() => {}); };
 pendingMsg();
 flush();
 window.addEventListener('online', flush);
