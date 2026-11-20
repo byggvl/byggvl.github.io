@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Įrankiai</title>
+<meta name="robots" content="noindex">
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;margin:0;background:#f4f4f1;color:#1d1d1b}
+.wrap{max-width:480px;margin:0 auto;padding:16px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.brand{font-weight:600;font-size:15px}
+.lang button{border:1px solid #ccc;background:#fff;border-radius:6px;padding:5px 9px;margin-left:4px;font-size:13px}
+.lang button.on{background:#1d1d1b;color:#fff;border-color:#1d1d1b}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid #e3e1d8}
+.tool{font-size:28px;font-weight:700;margin:2px 0}
+.sub{color:#666;font-size:14px}
+label.f{display:block;font-size:14px;margin:10px 0 4px;color:#444}
+input[type=text],textarea{width:100%;padding:12px;font-size:16px;border:1px solid #ccc;border-radius:8px;font-family:inherit}
+.btn{display:block;width:100%;padding:16px;font-size:17px;font-weight:600;border:0;border-radius:10px;margin-top:10px;cursor:pointer}
+.main{background:#1f7a4d;color:#fff}
+.warn{background:#b3261e;color:#fff}
+.sec{background:#fff;color:#1d1d1b;border:1px solid #ccc}
+.msg{padding:12px;border-radius:8px;font-size:15px;margin-bottom:12px;line-height:1.4}
+.err{background:#fdecea;color:#8a1c14}
+.ok{background:#e7f4ec;color:#145c37}
+.info{background:#eef3fb;color:#1c3d6b}
+.opt{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid #ddd;border-radius:8px;margin-top:6px;font-size:16px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="nf" class="hidden" style="font-family:Arial,sans-serif;color:#777;text-align:center;margin-top:30vh;font-size:18px">Puslapis nerastas / Page not found</div>
+<div class="wrap hidden" id="app">
+  <div class="top">
+    <div class="brand">MB BYGG VL</div>
+    <div class="lang"><button data-l="lt">LT</button><button data-l="en">EN</button><button data-l="ru">RU</button></div>
+  </div>
+
+  <div id="gps" class="msg info"></div>
+  <div id="pending" class="msg info hidden"></div>
+
+  <div class="card">
+    <label class="f" for="name" data-i="name"></label>
+    <input type="text" id="name" autocomplete="name">
+  </div>
+
+  <div id="v-tool" class="card hidden">
+    <div class="sub" data-i="thisTool"></div>
+    <div class="tool" id="tId"></div>
+    <div class="sub" id="tName"></div>
+    <button class="btn main" id="bTake" data-i="take"></button>
+  </div>
+
+  <div id="v-menu" class="card">
+    <div class="sub" data-i="other"></div>
+    <button class="btn warn" id="bMissing" data-i="reportMissing"></button>
+    <button class="btn sec" id="bDamaged" data-i="reportDamaged"></button>
+    <button class="btn sec hidden" id="bTakeDam" data-i="takeDamaged"></button>
+  </div>
+
+  <div id="v-form" class="card hidden">
+    <div class="tool" id="fTitle" style="font-size:20px"></div>
+    <div id="fList"></div>
+    <div id="manualBox">
+      <label class="f" for="manual" data-i="manual"></label>
+      <input type="text" id="manual" placeholder="MB-001" autocapitalize="characters">
+    </div>
+    <label class="f" for="comment" data-i="comment"></label>
+    <textarea id="comment" rows="3"></textarea>
+    <button class="btn" id="bSend"></button>
+    <button class="btn sec" id="bBack" data-i="back"></button>
+  </div>
+
+  <div id="out"></div>
+</div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbxB-SC38colmUA0SZ8qR2U5M9QvvGYEjJZuathrhqTnjPJ5IG9lH8Y8wi6LLoH_ltK2rw/exec';
+
+function parseQ() {
+  const sp = new URLSearchParams(location.search);
+  if (sp.get('t')) return { t: sp.get('t'), k: sp.get('k') || '' };
+  const s = decodeURIComponent(location.search.slice(1));
+  const i = s.lastIndexOf('.');
+  return i > 0 ? { t: s.slice(0, i), k: s.slice(i + 1) } : { t: '', k: '' };
+}
+const P = parseQ();
+
+const I = {
+  lt: {
+    name: 'Jūsų vardas ir pavardė', thisTool: 'Įrankis', take: 'Paėmiau šį įrankį', other: 'Kiti veiksmai',
+    reportMissing: 'Pranešti apie dingusį įrankį', reportDamaged: 'Lipdukas pažeistas / nusitrynė',
+    takeDamaged: 'Perimti įrankį su pažeistu lipduku', manual: 'Arba įveskite įrankio numerį',
+    comment: 'Komentaras (kas nutiko?)', send: 'Siųsti', back: 'Atgal',
+    gpsWait: 'Nustatoma jūsų vieta… Jei telefonas paklaus – spauskite „Leisti“.',
+    gpsOk: 'Vieta nustatyta ✓',
+    gpsDenied: 'Būtina leisti naudoti vietą (GPS). Įjunkite vietos nustatymą telefone, leiskite naršyklei naudoti vietą ir perkraukite puslapį.',
+    needName: 'Įveskite vardą ir pavardę.', needTool: 'Pasirinkite arba įveskite įrankio numerį.',
+    okTake: 'Užregistruota. Nuo dabar už šį įrankį atsakote jūs.', okReport: 'Pranešimas išsiųstas. Ačiū.',
+    queued: 'Nėra interneto. Įrašas išsaugotas telefone su tikru laiku ir vieta. Jis bus išsiųstas automatiškai, kai atsiras internetas ir vėl atidarysite šį puslapį.',
+    pending: 'Neišsiųstų įrašų telefone: {n}. Jie bus išsiųsti, kai atsiras internetas.',
+    offline: 'Nėra interneto – įrankio pavadinimo parodyti negalime, bet perimti galite.',
+    err: 'Klaida. Bandykite dar kartą.', BAD_CODE: 'Šis QR kodas negalioja. Praneškite atsakingam asmeniui.',
+    NOT_FOUND: 'Tokio įrankio numerio nėra.', NOT_ALLOWED: 'Šio įrankio taip perimti negalima.', NOT_REGISTERED: 'Pirmiausia nuskenuokite bet kurio įrankio QR kodą.',
+    missingTitle: 'Kuris įrankis dingo?', damagedTitle: 'Kurio įrankio lipdukas pažeistas?',
+    takeDamTitle: 'Kurį įrankį perimate?', none: 'Jūsų įrankių sąraše nėra – įveskite numerį žemiau.',
+    noneDam: 'Nėra įrankių su pažeistu lipduku.', sending: 'Siunčiama…',
+    invalidQr: 'QR kodas neatpažintas. Galite pranešti apie problemą žemiau.'
+  },
+  en: {
+    name: 'Your first and last name', thisTool: 'Tool', take: 'I took this tool', other: 'Other actions',
+    reportMissing: 'Report a missing tool', reportDamaged: 'Sticker damaged / worn off',
+    takeDamaged: 'Take over a tool with a damaged sticker', manual: 'Or enter the tool number',
+    comment: 'Comment (what happened?)', send: 'Send', back: 'Back',
+    gpsWait: 'Getting your location… If your phone asks, tap “Allow”.',
+    gpsOk: 'Location found ✓',
+    gpsDenied: 'Location (GPS) access is required. Turn on location on your phone, allow the browser to use it and reload the page.',
+    needName: 'Enter your first and last name.', needTool: 'Choose or enter a tool number.',
+    okTake: 'Registered. From now on you are responsible for this tool.', okReport: 'Report sent. Thank you.',
+    queued: 'No internet. The record is saved on your phone with the real time and location. It will be sent automatically when you are online and open this page again.',
+    pending: 'Unsent records on this phone: {n}. They will be sent when you are online.',
+    offline: 'No internet – the tool name cannot be shown, but you can still take it over.',
+    err: 'Error. Please try again.', BAD_CODE: 'This QR code is not valid. Please tell the person in charge.',
+    NOT_FOUND: 'No tool with this number.', NOT_ALLOWED: 'This tool cannot be taken over this way.', NOT_REGISTERED: 'First scan the QR code of any tool.',
+    missingTitle: 'Which tool is missing?', damagedTitle: 'Which tool has a damaged sticker?',
+    takeDamTitle: 'Which tool are you taking?', none: 'No tools in your list – enter the number below.',
+    noneDam: 'No tools with a damaged sticker.', sending: 'Sending…',
+    invalidQr: 'QR code not recognised. You can report the problem below.'
+  },
+  ru: {
+    name: 'Ваше имя и фамилия', thisTool: 'Инструмент', take: 'Я взял этот инструмент', other: 'Другие действия',
+    reportMissing: 'Сообщить о пропаже инструмента', reportDamaged: 'Наклейка повреждена / стёрлась',
+    takeDamaged: 'Взять инструмент с повреждённой наклейкой', manual: 'Или введите номер инструмента',
+    comment: 'Комментарий (что случилось?)', send: 'Отправить', back: 'Назад',
+    gpsWait: 'Определяем местоположение… Если телефон спросит – нажмите «Разрешить».',
+    gpsOk: 'Местоположение определено ✓',
+    gpsDenied: 'Нужно разрешить доступ к местоположению (GPS). Включите геолокацию в телефоне, разрешите браузеру её использовать и обновите страницу.',
+    needName: 'Введите имя и фамилию.', needTool: 'Выберите или введите номер инструмента.',
+    okTake: 'Записано. Теперь за этот инструмент отвечаете вы.', okReport: 'Сообщение отправлено. Спасибо.',
+    queued: 'Нет интернета. Запись сохранена в телефоне с реальным временем и местом. Она отправится автоматически, когда появится интернет и вы снова откроете эту страницу.',
+    pending: 'Неотправленных записей в телефоне: {n}. Они отправятся, когда появится интернет.',
+    offline: 'Нет интернета – название инструмента показать нельзя, но взять его можно.',
+    err: 'Ошибка. Попробуйте ещё раз.', BAD_CODE: 'Этот QR-код недействителен. Сообщите ответственному лицу.',
+    NOT_FOUND: 'Инструмента с таким номером нет.', NOT_ALLOWED: 'Этот инструмент так взять нельзя.', NOT_REGISTERED: 'Сначала отсканируйте QR-код любого инструмента.',
+    missingTitle: 'Какой инструмент пропал?', damagedTitle: 'У какого инструмента повреждена наклейка?',
+    takeDamTitle: 'Какой инструмент вы берёте?', none: 'В вашем списке нет инструментов – введите номер ниже.',
+    noneDam: 'Нет инструментов с повреждённой наклейкой.', sending: 'Отправка…',
+    invalidQr: 'QR-код не распознан. Вы можете сообщить о проблеме ниже.'
+  }
+};
+
+const S = {
+  get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const $ = id => document.getElementById(id);
+
+let lang = S.get('lang') || (navigator.language || 'lt').slice(0, 2);
+if (!I[lang]) lang = 'lt';
+let dev = S.get('dev');
+if (!dev) { dev = 'd' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); S.set('dev', dev); }
+
+let pos = null, gpsErr = false, mode = null, valid = false, damaged = [];
+
+function tr(k) { return (I[lang] && I[lang][k]) || I.lt[k] || k; }
+
+function render() {
+  document.querySelectorAll('[data-i]').forEach(e => { e.textContent = tr(e.dataset.i); });
+  document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.dataset.l === lang));
+  gpsMsg();
+  if (mode) formTexts();
+}
+document.querySelectorAll('.lang button').forEach(b => b.onclick = () => { lang = b.dataset.l; S.set('lang', lang); render(); });
+
+$('name').value = S.get('name') || '';
+$('name').oninput = () => S.set('name', $('name').value);
+
+function gpsMsg() {
+  const g = $('gps');
+  if (gpsErr) { g.className = 'msg err'; g.textContent = tr('gpsDenied'); }
+  else if (pos) { g.className = 'msg ok'; g.textContent = tr('gpsOk'); }
+  else { g.className = 'msg info'; g.textContent = tr('gpsWait'); }
+}
+
+function getPos() {
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) { gpsErr = true; gpsMsg(); return rej(new Error('NO_GPS')); }
+    navigator.geolocation.getCurrentPosition(
+      p => { pos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }; gpsErr = false; gpsMsg(); res(pos); },
+      e => { gpsErr = true; gpsMsg(); rej(new Error('NO_GPS')); },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
+    );
+  });
+}
+
+function show(msg, cls) {
+  const o = $('out');
+  o.textContent = '';
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = msg;
+  o.appendChild(d);
+  d.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+const ACT = { apiTake: 'take', apiTakeDamaged: 'takeDamaged', apiReport: 'report' };
+
+async function api(payload) {
+  const r = await fetch(API, { method: 'POST', body: JSON.stringify(payload) });
+  const j = await r.json();
+  if (!j.ok) { const e = new Error(j.error); e.server = true; throw e; }
+  return j.data;
+}
+
+const Q = {
+  load() { try { return JSON.parse(S.get('queue') || '[]'); } catch (e) { return []; } },
+  save(a) { S.set('queue', JSON.stringify(a)); }
+};
+
+function pendingMsg() {
+  const n = Q.load().length;
+  const b = $('pending');
+  b.classList.toggle('hidden', !n);
+  b.textContent = tr('pending').replace('{n}', n);
+}
+
+async function send(action, data) {
+  try {
+    return await api(Object.assign({ action: action }, data));
+  } catch (e) {
+    if (e.server) throw e;
+    const q = Q.load(); q.push({ action: action, data: data }); Q.save(q);
+    pendingMsg();
+    return { queued: true };
+  }
+}
+
+let flushing = false;
+async function flush() {
+  if (flushing) return;
+  const q = Q.load();
+  if (!q.length) return;
+  flushing = true;
+  const rest = [];
+  for (const it of q) {
+    try { await api(Object.assign({ action: it.action }, it.data)); }
+    catch (e) { if (!e.server) rest.push(it); }
+  }
+  Q.save(rest);
+  flushing = false;
+  pendingMsg();
+}
+
+function myName() {
+  const n = $('name').value.trim();
+  if (n.length < 3) { show(tr('needName'), 'err'); $('name').focus(); return null; }
+  return n;
+}
+
+async function act(fn, extra, okKey) {
+  const name = myName();
+  if (!name) return false;
+  show(tr('sending'), 'info');
+  try {
+    const p = await getPos();
+    const r = await send(ACT[fn], Object.assign({ name: name, device: dev, lat: p.lat, lng: p.lng, acc: p.acc, ts: Date.now() }, extra));
+    if (r && r.queued) show(tr('queued'), 'info'); else show(tr(okKey), 'ok');
+    return true;
+  } catch (e) {
+    const m = String((e && e.message) || e);
+    const codes = { BAD_CODE: 'BAD_CODE', NOT_FOUND: 'NOT_FOUND', NOT_REGISTERED: 'NOT_REGISTERED', NOT_ALLOWED: 'NOT_ALLOWED', NO_NAME: 'needName', NO_GPS: 'gpsDenied' };
+    const hit = Object.keys(codes).find(c => m.indexOf(c) >= 0);
+    show(tr(hit ? codes[hit] : 'err'), 'err');
+    return false;
+  }
+}
+
+$('bTake').onclick = async () => {
+  const b = $('bTake');
+  b.disabled = true;
+  const ok = await act('apiTake', { t: P.t, k: P.k }, 'okTake');
+  if (!ok) b.disabled = false;
+};
+
+function formTexts() {
+  $('fTitle').textContent = tr(mode === 'missing' ? 'missingTitle' : mode === 'damaged' ? 'damagedTitle' : 'takeDamTitle');
+  $('bSend').textContent = tr(mode === 'takeDamaged' ? 'take' : 'send');
+}
+
+async function openForm(m) {
+  mode = m;
+  $('out').textContent = '';
+  $('v-menu').classList.add('hidden');
+  $('v-tool').classList.add('hidden');
+  $('v-form').classList.remove('hidden');
+  $('manualBox').classList.toggle('hidden', m === 'takeDamaged');
+  $('bSend').className = 'btn ' + (m === 'takeDamaged' ? 'main' : 'warn');
+  $('manual').value = '';
+  $('comment').value = '';
+  formTexts();
+  const box = $('fList');
+  box.textContent = tr('sending');
+  let list = [];
+  try { list = m === 'takeDamaged' ? damaged : await api({ action: 'mine', device: dev, name: $('name').value }); } catch (e) {}
+  box.textContent = '';
+  if (!list.length) {
+    const d = document.createElement('div');
+    d.className = 'sub';
+    d.textContent = tr(m === 'takeDamaged' ? 'noneDam' : 'none');
+    box.appendChild(d);
+  }
+  list.forEach(x => {
+    const l = document.createElement('label');
+    l.className = 'opt';
+    const r = document.createElement('input');
+    r.type = 'radio'; r.name = 'tool'; r.value = x.id;
+    l.appendChild(r);
+    l.appendChild(document.createTextNode(x.id + ' – ' + x.name));
+    box.appendChild(l);
+  });
+}
+
+$('bMissing').onclick = () => openForm('missing');
+$('bDamaged').onclick = () => openForm('damaged');
+$('bTakeDam').onclick = () => openForm('takeDamaged');
+
+$('bBack').onclick = () => {
+  mode = null;
+  $('v-form').classList.add('hidden');
+  $('v-menu').classList.remove('hidden');
+  if (valid) $('v-tool').classList.remove('hidden');
+  $('out').textContent = '';
+};
+
+$('bSend').onclick = async () => {
+  const sel = document.querySelector('input[name=tool]:checked');
+  const id = (sel && sel.value) || $('manual').value.trim();
+  if (!id) { show(tr('needTool'), 'err'); return; }
+  const extra = { id: id, comment: $('comment').value };
+  const b = $('bSend');
+  b.disabled = true;
+  const ok = mode === 'takeDamaged'
+    ? await act('apiTakeDamaged', extra, 'okTake')
+    : await act('apiReport', Object.assign({ type: mode }, extra), 'okReport');
+  b.disabled = false;
+  if (ok) { $('v-form').classList.add('hidden'); mode = null; }
+};
+
+render();
+getPos().catch(() => {});
+function showApp(ok) {
+  $('app').classList.toggle('hidden', !ok);
+  $('nf').classList.toggle('hidden', ok);
+}
+
+api({ action: 'init', t: P.t, k: P.k, device: dev }).then(r => {
+  if (!r.known) { showApp(false); return; }
+  S.set('reg', '1');
+  showApp(true);
+  valid = r.valid;
+  damaged = r.damaged || [];
+  if (valid) {
+    $('tId').textContent = r.id;
+    $('tName').textContent = r.name;
+    $('v-tool').classList.remove('hidden');
+  } else if (P.t) {
+    show(tr('invalidQr'), 'err');
+  }
+  $('bTakeDam').classList.toggle('hidden', !damaged.length);
+}).catch(e => {
+  if (e && e.server) { showApp(!!S.get('reg')); show(tr('err'), 'err'); return; }
+  showApp(!!(S.get('reg') || (P.t && P.k)));
+  if (P.t && P.k) {
+    valid = true;
+    $('tId').textContent = P.t;
+    $('tName').textContent = tr('offline');
+    $('v-tool').classList.remove('hidden');
+  }
+});
+
+pendingMsg();
+flush();
+window.addEventListener('online', flush);
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
